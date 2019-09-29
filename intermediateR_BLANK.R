@@ -1,5 +1,5 @@
 # ---- Set Working Directory ----
-
+setwd("C:/Users/Natasha/projects/AFS_IntermediateR/")
 
 # ---- Load Packages ----
 library(tidyr)
@@ -11,6 +11,8 @@ library(ggmosaic)
 
 # ---- Import Data ----
 # Import .txt files (working_data and park_details)
+data <- read.delim("working_data.txt")
+parks <- read.delim("park_details.txt")
 
 ## Take a few minutes to explore these two data frames with a partner
 # or in a small group.
@@ -18,13 +20,29 @@ library(ggmosaic)
 
 # ---- Explore Data ----
   # Number of rows and columns
+glimpse(data)
+glimpse(parks)
+
+nrow(data)
+ncol(data)
+
+dim(data)
+dim(parks)
 
   # First six rows
+head(data)
+head(data)
+  
   # Last six rows
+tail(data)
+tail(parks)
 
   # Column names
+colnames(data)
+colnames(parks)
 
   # summarise each column
+
 
   # View the structure of the data frame
   # View the structure of the data frame using dplyr
@@ -42,7 +60,7 @@ library(ggmosaic)
 # {stringr}: working with strings
 # {forcats}: working with factors
 # {purrr}: functional programming
-# {rvset}: web scraping
+# {rvest}: web scraping
 
 # https://www.tidyverse.org/packages/
 
@@ -50,44 +68,60 @@ library(ggmosaic)
 # dplyr::select() : selects columns from a data frame and outputs as a data frame
 
 # Goal: Display the park name and common name columns
-
+select(data, park.name, common.name)
 
 # dplyr::filter() : filters rows from a data frame
+filter(data, category == "Amphibian",
+       park.name == "Arches  National Park")
 
 # Goal: Display amphibian data from Arches National Park
 
-
+#!! ctrl shift m is pipe !!
 # %>%      : a pipe, used to create a workflow
 # Information is passed through a pipe, then used as the first argument
 # for the function on the other side
-
+data %>%
+  select(park.name, common.name)
 
 
 
 # Pipes are valuable when we want to perform multiple steps
 
 # Goal: Display park name, latitude, and longitude from parks in Hawaii
-
+parks %>%
+  filter(state == "HI") %>%
+  select(park.name, latitude, longitude)
 
 # dplyr::group_by() : splits your data into groups based on the variables you specify
 
 # Goal: group the parks data by state
-
+parks %>% 
+  group_by(state)
 
 # dplyr::summarise() : returns a statistic (from each group, if applicable)
 
 # Goal: Create a summary table with the average park size, by state
+parks %>% 
+  group_by(state) %>% 
+  summarise(average_size = mean(acres))
 
 
 # We can store this as an object
+table1 <- parks %>% 
+  group_by(state) %>% 
+  summarise(average_size = mean(acres))
 
 
-
+table1
 ## Goal: Create a summary table of the average latitide, by state, of parks that
 # are greater than 100,000 acres and store it in an object called mytable
+mytable <- parks %>% 
+  filter(acres > 100000) %>% 
+  group_by(state) %>% 
+  summarise(avg_lat = mean(latitude))
 
 
-
+mytable
 # ---- Tidy Data ----
 # These functons work because we're dealing with "tidy" data
 
@@ -109,45 +143,65 @@ library(ggmosaic)
 
 # Goal: Clean and reshape these files, combine them with our existing data set
 
-
 # ---- Acadia National Park Data ----
 # Import .csv file
+acadia <- read.csv("ACAD.csv")
+
 
 ## What needs to change before we can combine these data frames?
-
+# 1. same size
+# 2. same column names
+# 3. combine record and id
 
 # ---- Change Names to Lower Case ----
 # dplyr::rename_all() : rename all of the columns based on a function
 # see also: {janitor} for more options
+tolower(("THISISATEST"))
 
+acadia <- acadia %>% 
+  rename_all(tolower)
 
 # ---- Unite records and id ----
 # Goal: We want a column called record.id that contains
 # record and id, separated with a "-"
 
 # Option 1: base::paste()
+paste("a", "b", sep = "-")
+
+acadia %>% 
+  mutate(record.id = paste(record, id, sep = "-"))
 
 ## Why does this create more work for us?
+# still have 2 columns
 
 # Option 2: tidyr::unite() : unite two columns to create one new one in its place
-
+acadia <- acadia %>% 
+  unite(record.id, c(record, id), sep = "-")
 
 # ---- Fill in the Blanks ----
 # In the order and family columns, the NAs should actually be filled in based on
 # the previous values
 
-
 # tidyr::fill() : fills missing values in a column using the previous entry
-
+acadia <- acadia %>% 
+  fill(order, family)
 
 # ---- Reevaluate Data Frame ----
 ## Do you think these can be combined now?
-
+head(data, n = 1)
+head(acadia, n = 1)
 
 # dplyr::bind_rows() : bind data frames by row (i.e. stacked)
+data2 <- bind_rows(data, acadia)
 
+glimpse(data2)
 
 # dplyr::mutate_if() : if a column meets some criteria, apply a function to the column
+data2 %>% 
+  mutate(park.name = as.factor(park.name))
+
+data2 <- data2 %>% 
+  mutate_if(is.character, as.factor) %>% 
 
 
 # ---- Redwood National Park Data ----
