@@ -201,12 +201,15 @@ data2 %>%
   mutate(park.name = as.factor(park.name))
 
 data2 <- data2 %>% 
-  mutate_if(is.character, as.factor) %>% 
+  mutate_if(is.character, as.factor)
 
 
 # ---- Redwood National Park Data ----
 # Import data (REDW_records and REDW_species)
+redwood_records <- read.delim("REDW_records.txt")
+redwood_species <- read.delim("REDW_species.txt")
 
+redwood_records
 ## Take a few minutes to explore these two data frames with a partner
 # or in a small group.
 ## How are the data structured?
@@ -219,65 +222,88 @@ data2 <- data2 %>%
 # tidyr::gather() : convert from wide to long format
 
 # Goal: Convert redwood_records from wide to long
+redwood_long <- redwood_records %>% 
+  gather(key = "scientific.name",
+         value = "oasr",
+         -record.id)
 
-
-
+head(redwood_long)
 # tidyr::drop_na() : drop all rows that contain any NAs
-
+redwood_long <- redwood_long %>% 
+  drop_na()
 
 # ---- Separate oasr ----
 # oasr represents occurrence, abundance, seasonality, and report.status
 
 
 # tidyr::separate() : separate a string from one column into multipl columns
+redwood_long <- redwood_long %>% 
+  separate(oasr,
+           into = c("occurrence", "abundance", "seasonality", "report.status"),
+           sep = "-")
 
 # Always test these processes before overwriting the object!
 
 
 # Overwrite object
+glimpse(redwood_long)
 
 ## What is wrong with this data?
+# NA as strings 
 
 # Option 1: Replace these using base::ifelse()
-
+ifelse(redwood_long$occurrence == "NA", NA, redwood_long$occurrence)
 
 # Option 1a: Do this for all three columns individually
-
+redwood_long %>% 
+  mutate(occurrence = ifelse(occurrence == "NA", NA, occurrence))
 
 # Option 2: Use na_if(), a built-in dplyr function for doing exactly this
 # dplyr:;na_if() : if a value matches the given value, change it to NA
 
 
 # Option 2a: Use this on all three columns individually
-
+redwood_long %>% 
+  mutate(occurrence = na_if(occurrence, "NA"))
 
 # Option 2b: Specify that it should be used on any column that is a character vector
-
+redwood_long %>% 
+  mutate_if(is.character, ~na_if(., "NA"))
 
 # dplyr::mutate_if() : if a column meets some criteria, apply a function to the column
 
 
 # Option 3: If this function didn't exist: create your own!
+example_function <- function(input) {input + 10}
 
+myfunction <- function(input) {
+  ifelse(input == "NA", NA, input)
+}
+
+myfunction("NA")
 
 # Option 3a: Apply to each column individually
-
+redwood_long %>% 
+  mutate(occurrence = myfunction(occurrence),
+         abundance = myfunction(abundance))
 
 # Option 3b: Specify that it should be used on any column that is a character vector
-
+redwood_long %>% 
+  mutate_if(is.character, myfunction)
 
 # Option 3c: Build the function inside mutate_if
-
+redwood_long <- redwood_long %>% 
+  mutate_if(is.character, ~ifelse(. == "NA", NA, .))
 
 # Overwrite existing object to make the change permanent
-
+glimpse(redwood_long)
 
 # ---- Joining Data Frames(?) ----
 # Eventually we want to be able to combine the information from 
 # redwood_long and redwood_species
 
 
-## What variable will be used to "match" records?
+## What variable will be used to "match" records? scientific name
 ## Does anything else need to change for that to happen?
 # Note: We'll use a technique where the order of the rows doesn't matter
 
@@ -287,13 +313,16 @@ data2 <- data2 %>%
 # base:;gsub() : search for a pattern in a string and replace it
 
 # Goal: Replace all "x" in our string with "y"
+gsub(patter = "x", replace = "y", "xoxo")
 
 # Goal: Replace all "REDW" in our record.id column with "THIS IS A TEST"
-
+redwood_long %>% 
+  mutate(record.id = gsub(pattern = "REDW", replace = "THIS IS A TEST", record.id))
 
 # Goal: Replace all "." in our scientific.name column with " "
 # Does anyone happen to know why this doesn't work? (It's a *very* tricky reason!)
-
+redwood_long <- redwood_long %>% 
+  mutate(scientific.name = gsub(pattern = "\\.", replace = " ", scientific.name))
 
 # Solution:
 
@@ -307,33 +336,51 @@ data2 <- data2 %>%
 
 # dplyr::left_join(x, y) : return all rows from x and all columns from x and y
 # match each row based on values in corresponding columns
+redwood_complete <- left_join(redwood_long, redwood_species)
 
 # ---- Combining Data Frames ----
-
+head(redwood_complete, n = 1)
+head(data2, n = 1)
 
 # Goal: Combine data2 and redwood_complete by rows
 # Problem: Columns aren't in the same order... but that's ok!
 # bind_rows() doesn't rely on column being in the same order, just having the same names
-
+data3 <- bind_rows(redwood_complete, data2)
 
 # ---- Joining Park Data ----
 
 
 # Goal: Join the park data from each record
+data_complete <- left_join(data3, parks)
 
+colnames(data_complete)
 
 # ---- Convert Characters to Factors ----
 ## Convert all character vectors back to factors
+# shortcut to run and replace with package magrittr
+install.packages("magrittr")
+library(magrittr)
 
+data_complete %<>% 
+  mutate_if(is.character, as.factor)
 
 # ---- Communicating Patterns ----
 ## Our focus was on amphibians so subset the data to only look at these records
+amp <- data_complete %>% 
+  filter(category == "Amphibian")
 
-
+glimpse(amp)
 ## Potential research questions:
 # How many families of amphibians are represented in the data?
 
+amp %>% 
+  summarise(n_distinct(family))
+  
 # Which states have the highest richness of amphibians in national parks?
+richness_table <- amp %>% 
+  filter(occurrence == "Present") %>% 
+  group_by(state) %>% 
+  summarise(richness = n_distinct(scientific.name))
 
 # In these states, how are these records distributed across parks? Across taxons?
 # What does the distribution of native and non-native specis look like?
@@ -351,37 +398,58 @@ data2 <- data2 %>%
 # Goal: Identify the three states with the greatest richness
 # dplyr::arrange() : arrange a data frame by a variable
 # dplyr::arrange(desc()) : ...in descending order
-
+richness_table %>% 
+    arrange((richness))
 
 # dplyr::slice() : extract specific rows from a data frame
-
+richness_table %>% 
+  arrange(richness) %>% 
+  slice(1:3)
 
 # dplyr::pull() : pull the values from a column as a vector
+mystates <- richness_table %>% 
+  arrange(desc(richness)) %>% 
+  slice(1:3) %>% 
+  pull(state)
 
-
-
+mystates
 # Goal: Subset the data to only look at these states
+amp_subset <- amp %>% 
+  filter(state %in% mystates)
+  
 
-
+levels(amp_subset$state)
 # Goal: Let's save computational power by dropping all of the un-used factor levels
-
+amp_subset <- amp_subset %>% 
+  droplevels()
 
 # ---- Question 3 ----
 # In these states, how are these records distributed across states? parks?
 # taxons? What does the distribution of native and non-native specis look like?
 
 # Goal: Create a subset summarising these points
+summary_table <- amp_subset %>% 
+  filter(occurrence == "Present") %>% 
+  group_by(state, park.code, family, order, nativeness) %>% 
+  summarise(n = n_distinct(scientific.name)) %>% 
+  droplevels()
 
+View(summary_table)
 ## What are the pros and cons of this table?
 
 # ---- Visualizing the Data ----
 ## Goal: Boxplot of number of species per state
+ggplot(summary_table) +
+  geom_boxplot(aes(x = state, y = n))
 
 # Overlay points
 
 # Overlay jittered points
 
 # Alternative to boxplots: violin plots
+ggplot(summary_table) +
+  geom_violin(aes(x = state, y = n)) +
+  geom_jitter(aes(x = state, y = n), width = 0.25)
 
 # Goal: Boxplot of number of species by nativeness
 
@@ -389,6 +457,11 @@ data2 <- data2 %>%
 
 
 # Mosaic plot (from {ggmosaic})
+ggplot(summary_table) +
+  geom_mosaic(aes(weight = n,
+                  x = product(state, nativeness),
+                  fill = state)) +
+  theme_bw()
 
 # A nicer example: state vs order
 
@@ -400,36 +473,83 @@ data2 <- data2 %>%
 # Building up an alluvial plot
 
 # Basic components
-
+ggplot(summary_table,
+       aes(y = n, axis1 = state, axis2 = park.code)) +
+  geom_alluvium() +
+  theme_bw()
 
 # Add vertical stratum
-
+ggplot(summary_table,
+       aes(y = n, axis1 = state, axis2 = park.code)) +
+  geom_alluvium() +
+  geom_stratum(w = 1/10) +
+  theme_bw()
 
 # Add labels to the stratum
-
+ggplot(summary_table,
+       aes(y = n, axis1 = state, axis2 = park.code)) +
+  geom_alluvium() +
+  geom_stratum(w = 1/10) +
+  geom_label(stat = "stratum", label.strata = TRUE, size = 3) +
+  theme_bw()
 
 # Add x axis labels
-
+ggplot(summary_table,
+       aes(y = n, axis1 = state, axis2 = park.code)) +
+  geom_alluvium() +
+  geom_stratum(w = 1/10) +
+  geom_label(stat = "stratum", label.strata = TRUE, size = 3) +
+  theme_bw() +
+  scale_x_discrete(limits = c("State", "Park Code"),
+                   expand = c(0.05, 0.05))
 
 # Fill the swaths based on nativeness
-
+ggplot(summary_table,
+       aes(y = n, axis1 = state, axis2 = park.code)) +
+  geom_alluvium(aes(fill = nativeness)) +
+  geom_stratum(w = 1/10) +
+  geom_label(stat = "stratum", label.strata = TRUE, size = 3) +
+  theme_bw() +
+  scale_x_discrete(limits = c("State", "Park Code"),
+                   expand = c(0.05, 0.05))
 
 # Add order as a third stratum
-
+ggplot(summary_table,
+       aes(y = n, axis1 = state, axis2 = park.code, axis3 = order)) +
+  geom_alluvium(aes(fill = nativeness)) +
+  geom_stratum(w = 1/10) +
+  geom_label(stat = "stratum", label.strata = TRUE, size = 3) +
+  theme_bw() +
+  scale_x_discrete(limits = c("State", "Park Code", "Order"),
+                   expand = c(0.05, 0.05))
 
 # At this resolution, it would be better if we collapsed our table to omit family
-
+summary_table <- summary_table %>% 
+  group_by(state, park.code, order, nativeness) %>% 
+  summarise(n = sum(n))
 
 # Look at how the plot changes
+ggplot(summary_table,
+       aes(y = n, axis1 = state, axis2 = park.code, axis3 = order)) +
+  geom_alluvium(aes(fill = nativeness)) +
+  geom_stratum(w = 1/10) +
+  geom_label(stat = "stratum", label.strata = TRUE, size = 3) +
+  theme_bw() +
+  scale_x_discrete(limits = c("State", "Park Code", "Order"),
+                   expand = c(0.05, 0.05))
+
 
 
 # It would be easier to read if the parks were arranged by state
 # forcats::fct_inorder() : reorders factor levels by first appearance  
 # Make sure the rows of the data frame are in the right order
+summary_table2 <- summary_table %>% 
+  arrange(state, park.code)
 
+levels(summary_table2$park.code)
 
 # Refactor state
-
+summary_table2$park.code <- fct_inorder(summary_table2$park.code)
 ## Why do you think state was already in the "correct" order?
 
 # Refactor park.code
@@ -437,10 +557,24 @@ data2 <- data2 %>%
 ## Why was park.code not in the "correct" order?
 
 # Look at how the plot changes
-
+ggplot(summary_table2,
+       aes(y = n, axis1 = state, axis2 = park.code, axis3 = order)) +
+  geom_alluvium(aes(fill = nativeness), col = "black") +
+  geom_stratum(w = 1/10) +
+  geom_label(stat = "stratum", label.strata = TRUE, size = 3) +
+  theme_bw() +
+  scale_x_discrete(limits = c("State", "Park Code", "Order"),
+                   expand = c(0.05, 0.05))
 
 # Now that we know there are no unused levels, we can outline each swath in black
-
+ggplot(summary_table2,
+       aes(y = n, axis1 = state, axis2 = park.code, axis3 = order)) +
+  geom_alluvium(aes(fill = nativeness), col = "black") +
+  geom_stratum(w = 1/10) +
+  geom_label(stat = "stratum", label.strata = TRUE, size = 3) +
+  theme_bw() +
+  scale_x_discrete(limits = c("State", "Park Code", "Order"),
+                   expand = c(0.05, 0.05))
 
 
 ## How does this compare to states with very few species of amphibians?
